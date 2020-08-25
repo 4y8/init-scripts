@@ -1,0 +1,60 @@
+#!/bin/busybox ash
+
+umask 022
+
+. /usr/lib/init/rc.common
+
+export PATH="/bin:/sbin:/usr/bin"
+
+# Enable soft reboot on ctrl-alt-del.
+ctrlaltdel -s
+
+log "Welcome to YLFS!"
+
+log "Mounting base filesystems."
+mkdir -p /dev/{,pts,shm} /proc /sys /run{,lock}
+
+mount -n -t proc -o nosuid,noexec,nodev proc /proc
+mount -n -t sysfs -o nosuid,noexec,nodev sysfs /sys
+
+mount -n -t tmpfs -o nosuid,mode=0755 dev /dev
+mount -n -t devpts -o gid=5,mode=0620 devpts /dev/pts
+ 
+# Mount interfaces.
+ln -s /proc/self/fd /dev/fd
+ln -s /dev/fd/0     /dev/stdin
+ln -s /dev/fd/1     /dev/stdout
+ln -s /dev/fd/2     /dev/stderr
+
+log "Starting mdev."
+mdev -s
+# Unable hot plug
+echo "/bin/mdev" > /proc/sys/kernel/hotplug
+
+log "Checking filesystems."
+fsck -ATa
+[ $? -eq 1 ] && {
+    log "Filesystem errors exist, fix manually."
+    /bin/sh
+    /bin/halt -r
+}
+
+log "Remounting the root file system as read-write."
+mount -o remount,rw /
+
+log "Mounting all filesystems."
+mount -a
+
+log "Enabling swap."
+swapon -a
+
+log "Setting random seed."
+[ -f /etc/random-seed ] && /bin/cat /etc/random-seed >/dev/urandom
+/bin/dd if=/dev/urandom of=/etc/random-seed count=1 bs=512 2>/dev/null
+
+log "Unabling core dumps."
+ulimit -c unlimited
+
+log "Setting host name."
+read -r hostname < /etc/hostname
+printf "%s" "${hostname:-YLFS}" > /proc/sys/kernel/hostname

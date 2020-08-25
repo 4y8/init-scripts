@@ -1,0 +1,7 @@
+log () {
+    printf "\033[31;1m:: \033[m%s\n" "$1"
+
+    # Send init messages to /dev/kmsg for dmesg only if it exists.
+    [ -w /dev/null ] && [ -w /dev/kmsg ] &&
+    printf 'init: %s\n' "$@" 2>/dev/null >/dev/kmsg
+}
