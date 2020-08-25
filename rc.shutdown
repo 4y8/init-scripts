@@ -1,0 +1,71 @@
+#!/bin/sh
+
+umask 022
+
+# Load common functions between init files.
+# shellcheck disable=1091
+. /usr/lib/init/rc.common
+
+# Get user settings.
+# shellcheck disable=1091
+. /etc/rc.conf
+
+export PATH="/bin:/sbin:/usr/bin"
+
+log "Shutting down."
+
+HWCLOCK_PARAMS="-w"
+case $HARDWARECLOCK in
+    "")
+        ;;
+    UTC)
+        HWCLOCK_PARAMS="-u $HWCLOCK_PARAMS"
+        ;;
+    localtime)
+        HWCLOCK_PARAMS="-l $HWCLOCK_PARAMS"
+        ;;
+    *)
+        HWCLOCK_PARAMS=""
+        ;;
+esac
+
+[ -n "$HWCLOCK_PARAMS" ] && {
+    log "Saving system clock."
+    [ -n "$TIMEZONE" ] && export TZ="$TIMEZONE"
+    hwclock "$HWCLOCK_PARAMS" /dev/rtc0
+    unset TZ
+}
+
+log "Save random seed."
+/bin/dd if=/dev/urandom of=/etc/random-seed count=1 bs=512 2>/dev/null
+
+BASENAME="$(basename "$0")"
+log "Kill processes."
+for s in /run/*; do
+    runservice "$s" run -k
+    printf "%s: '%s' %s.\n" \
+           "$BASENAME" "$s" -k
+done
+
+killall5 -s TERM
+sleep 3
+killall5 -s KILL
+
+log "Unmounting filesystems."
+umount -rat nosysfs,noproc,nodevtmpfs,notmpfs
+
+log "Disabling swap."
+swapoff -a
+
+log "Remounting root filesystem as read-only."
+mount -o remount,ro /
+sync
+
+case "$1" in
+    "reboot")
+        halt -r
+        ;;
+    "shutdown")
+        halt -p
+        ;;
+esac 

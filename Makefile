@@ -3,3 +3,4 @@ install:
 	cp rc.shutdown /bin/
 	mkdir -p       /usr/lib/init
 	cp rc.common   /usr/lib/init
+	[ ! (-f /etc/rc.conf) ] && :> /etc/rc.conf

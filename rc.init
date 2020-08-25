@@ -1,7 +1,9 @@
-#!/bin/busybox ash
+#!/bin/sh
 
 umask 022
 
+# Load common functions between init files.
+# shellcheck disable=1091
 . /usr/lib/init/rc.common
 
 export PATH="/bin:/sbin:/usr/bin"
@@ -12,7 +14,7 @@ ctrlaltdel -s
 log "Welcome to YLFS!"
 
 log "Mounting base filesystems."
-mkdir -p /dev/{,pts,shm} /proc /sys /run{,lock}
+mkdir -p /dev /dev/pts /dev/shm /proc /sys /run /run/lock
 
 mount -n -t proc -o nosuid,noexec,nodev proc /proc
 mount -n -t sysfs -o nosuid,noexec,nodev sysfs /sys
@@ -53,8 +55,19 @@ log "Setting random seed."
 /bin/dd if=/dev/urandom of=/etc/random-seed count=1 bs=512 2>/dev/null
 
 log "Unabling core dumps."
-ulimit -c unlimited
+ulimit unlimited
 
 log "Setting host name."
 read -r hostname < /etc/hostname
 printf "%s" "${hostname:-YLFS}" > /proc/sys/kernel/hostname
+
+# Run user scripts
+for rc in /etc/rc.d/*; do
+    $rc
+done
+
+log "Init TTYs."
+sh -c '/bin/respawn /bin/getty /dev/tty1 linux' > /dev/null 2>&1
+sh -c '/bin/respawn /bin/getty /dev/tty2 linux' > /dev/null 2>&1
+sh -c '/bin/respawn /bin/getty /dev/tty3 linux' > /dev/null 2>&1
+sh -c '/bin/respawn /bin/getty /dev/tty4 linux' > /dev/null 2>&1
